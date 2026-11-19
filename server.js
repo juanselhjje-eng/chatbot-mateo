@@ -3,7 +3,7 @@ import express from "express";
 import helmet from "helmet";
 import rateLimit from "express-rate-limit";
 import path from "node:path";
-import { randomUUID } from "node:crypto";
+import { randomUUID, createHmac, timingSafeEqual } from "node:crypto";
 import { fileURLToPath } from "node:url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -17,6 +17,8 @@ const OWNER_PHONE = digits(process.env.OWNER_WHATSAPP_NUMBER || "");
 const WA_TOKEN = process.env.WHATSAPP_TOKEN || "";
 const WA_PHONE_ID = process.env.WHATSAPP_PHONE_NUMBER_ID || "";
 const WA_VERIFY = process.env.WHATSAPP_VERIFY_TOKEN || "";
+const META_APP_SECRET = process.env.META_APP_SECRET || "";
+const WA_NOTIFICATION_TEMPLATE = process.env.WHATSAPP_NOTIFICATION_TEMPLATE || "";
 const WA_VERSION = process.env.WHATSAPP_API_VERSION || "v27.0";
 const IG_TOKEN = process.env.INSTAGRAM_ACCESS_TOKEN || "";
 const IG_ACCOUNT_ID = process.env.INSTAGRAM_ACCOUNT_ID || "";
@@ -26,7 +28,7 @@ const BLACKOPS_API_URL = (process.env.BLACKOPS_API_URL || "https://yxldniscfjmzu
 const ESCALATION_MS = 2 * 60 * 1000;
 
 app.use(helmet({ contentSecurityPolicy: false }));
-app.use(express.json({ limit: "1mb" }));
+app.use(express.json({ limit: "1mb", verify: (req, _res, buffer) => { req.rawBody = Buffer.from(buffer); } }));
 app.use(express.static(path.join(__dirname, "public")));
 app.use("/api/chat", rateLimit({ windowMs: 60_000, limit: 20, standardHeaders: true, legacyHeaders: false }));
 
@@ -48,6 +50,14 @@ No están confirmados dirección exacta, edad mínima, política completa de ree
 
 function digits(value) { return String(value || "").replace(/\D/g, ""); }
 function dbReady() { return Boolean(SUPABASE_URL && SUPABASE_KEY); }
+function validMetaSignature(req) {
+  if (!META_APP_SECRET || !req.rawBody) return false;
+  const signature = req.get("x-hub-signature-256") || "";
+  if (!signature.startsWith("sha256=")) return false;
+  const expected = Buffer.from("sha256=" + createHmac("sha256", META_APP_SECRET).update(req.rawBody).digest("hex"));
+  const received = Buffer.from(signature);
+  return expected.length === received.length && timingSafeEqual(expected, received);
+}
 function waReady() { return Boolean(WA_TOKEN && WA_PHONE_ID); }
 
 async function db(pathname, options = {}) {
@@ -95,13 +105,19 @@ async function gemini(contents, systemInstruction, jsonMode = false) {
 
 async function sendWhatsApp(to, body) {
   if (!waReady()) throw new Error("WhatsApp Cloud API no está configurada");
-  const response = await fetch(`https://graph.facebook.com/${WA_VERSION}/${WA_PHONE_ID}/messages`, {
-    method: "POST",
-    headers: { Authorization: `Bearer ${WA_TOKEN}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ messaging_product: "whatsapp", recipient_type: "individual", to: digits(to), type: "text", text: { preview_url: false, body: String(body).slice(0, 4000) } }),
-    signal: AbortSignal.timeout(15000)
-  });
-  const data = await response.json();
+  const endpoint = `https://graph.facebook.com/${WA_VERSION}/${WA_PHONE_ID}/messages`;
+  const headers = { Authorization: `Bearer ${WA_TOKEN}`, "Content-Type": "application/json" };
+  const textPayload = { messaging_product: "whatsapp", recipient_type: "individual", to: digits(to), type: "text", text: { preview_url: false, body: String(body).slice(0, 4000) } };
+  let response = await fetch(endpoint, { method: "POST", headers, body: JSON.stringify(textPayload), signal: AbortSignal.timeout(15000) });
+  let data = await response.json();
+  if (!response.ok && WA_NOTIFICATION_TEMPLATE) {
+    const templatePayload = {
+      messaging_product: "whatsapp", to: digits(to), type: "template",
+      template: { name: WA_NOTIFICATION_TEMPLATE, language: { code: "es_CO" }, components: [{ type: "body", parameters: [{ type: "text", text: String(body).slice(0, 950) }] }] }
+    };
+    response = await fetch(endpoint, { method: "POST", headers, body: JSON.stringify(templatePayload), signal: AbortSignal.timeout(15000) });
+    data = await response.json();
+  }
   if (!response.ok) throw new Error(data.error?.message || `WhatsApp HTTP ${response.status}`);
   return data;
 }
@@ -276,6 +292,7 @@ app.get("/webhooks/whatsapp", (req, res) => {
 });
 
 app.post("/webhooks/whatsapp", async (req, res) => {
+  if (!validMetaSignature(req)) return res.sendStatus(401);
   res.sendStatus(200);
   try {
     for (const entry of req.body?.entry || []) for (const change of entry.changes || []) {
@@ -314,6 +331,7 @@ async function sendInstagram(recipientId, text) {
 }
 
 app.post("/webhooks/instagram", async (req, res) => {
+  if (!validMetaSignature(req)) return res.sendStatus(401);
   res.sendStatus(200);
   try {
     for (const entry of req.body?.entry || []) for (const event of entry.messaging || []) {
