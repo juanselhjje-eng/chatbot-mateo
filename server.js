@@ -3,8 +3,8 @@ import express from "express";
 import helmet from "helmet";
 import rateLimit from "express-rate-limit";
 import path from "node:path";
+import { randomUUID } from "node:crypto";
 import { fileURLToPath } from "node:url";
-import { randomUUID, createHash } from "node:crypto";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -125,7 +125,7 @@ async function answerCustomer(message, history = []) {
     { role: "user", parts: [{ text: message }] }
   ];
   const raw = await gemini(contents, prompt, true);
-  const clean = raw.replace(/^\`\`\`json\s*/i, "").replace(/\`\`\`$/, "").trim();
+  const clean = raw.replace(/^```json\s*/i, "").replace(/```$/, "").trim();
   const parsed = JSON.parse(clean);
   return {
     reply: String(parsed.reply || "Voy a confirmar ese dato con el equipo y te respondo en un momento.").slice(0, 1500),
@@ -375,7 +375,7 @@ async function monitorWebsite() {
     const previous = await db("agent_monitor_snapshots?monitor_name=eq.website&select=*&limit=1");
     const old = previous[0];
     const changed = !old || old.state !== state;
-    await db("agent_monitor_snapshots?monitor_name=eq.website", {
+    await db("agent_monitor_snapshots?on_conflict=monitor_name", {
       method: "POST",
       headers: { Prefer: "resolution=merge-duplicates,return=representation" },
       body: JSON.stringify({ monitor_name: "website", state, http_status: response.status, checked_at: new Date().toISOString() })
