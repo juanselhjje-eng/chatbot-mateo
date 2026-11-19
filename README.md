@@ -31,7 +31,7 @@ Chatbot web en español basado en el documento **Black Ops Paintball — Base de
    PORT=3000
    AI_API_KEY=tu_clave
    AI_BASE_URL=https://openrouter.ai/api/v1
-   AI_MODEL=openai/gpt-4o-mini
+   AI_MODEL=openrouter/free
    BLACKOPS_API_URL=https://yxldniscfjmzuvikgwaf.supabase.co/functions/v1/api
    ```
 
