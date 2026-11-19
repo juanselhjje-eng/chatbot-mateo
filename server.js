@@ -3,9 +3,9 @@ import express from "express";
 import helmet from "helmet";
 import rateLimit from "express-rate-limit";
 import path from "node:path";
-import { randomUUID, createHmac, timingSafeEqual } from "node:crypto";
+import { randomUUID, createHmac, timingSafeEqual, createHash } from "node:crypto";
 import { fileURLToPath } from "node:url";
-import { runCustomerTeam, runMarketingResearchTeam, runOwnerSecretary, runGeneralAudit, getAgentRoster } from "./agents.js";
+import { runCustomerTeam, runMarketingResearchTeam, runOwnerSecretary, runGeneralAudit, runSubagent, getAgentRoster } from "./agents.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -396,6 +396,29 @@ async function monitorWebsite() {
   }
 }
 
+async function monitorAgenda() {
+  if (!dbReady()) return;
+  try {
+    const range = dateRange("agenda");
+    const data = await publicApi({ method: "GET", path: `/api/public/availability?from=${range.from}&to=${range.to}` });
+    const snapshot = createHash("sha256").update(JSON.stringify(data)).digest("hex");
+    const previous = await db("agent_monitor_snapshots?monitor_name=eq.agenda&select=*&limit=1");
+    const changed = previous[0] && previous[0].state !== snapshot;
+    await db("agent_monitor_snapshots?on_conflict=monitor_name", {
+      method: "POST",
+      headers: { Prefer: "resolution=merge-duplicates,return=representation" },
+      body: JSON.stringify({ monitor_name: "agenda", state: snapshot, http_status: 200, checked_at: new Date().toISOString() })
+    });
+    if (changed) {
+      const summary = await runSubagent(gemini, "websiteCalendar", "Resume los cambios detectados en la disponibilidad de los próximos 7 días. No concluyas que hay reservas nuevas o canceladas si la fuente no lo indica. Datos actuales: " + JSON.stringify(data).slice(0, 6000));
+      const reviewed = await runSubagent(gemini, "reviewer", "Revisa que el resumen no afirme cambios específicos que los datos no demuestran. Si no se puede saber qué cambió, dilo.", summary);
+      await notifyOwner("SUPERVISOR DE AGENDA — CAMBIÓ LA DISPONIBILIDAD\n" + reviewed);
+    }
+  } catch (error) {
+    await notifyOwner("SUPERVISOR DE AGENDA — No pude consultar la agenda de los próximos 7 días. Error: " + error.message);
+  }
+}
+
 async function sendDailySummary() {
   if (!dbReady() || !OWNER_PHONE) return;
   const now = new Date();
@@ -417,7 +440,7 @@ app.get("/api/health", (_req, res) => res.json({
 }));
 
 setInterval(() => checkExpiredEscalations().catch(e => console.error(e.message)), 15000);
-setInterval(() => monitorWebsite().catch(e => console.error(e.message)), 5 * 60 * 1000);
+setInterval(() => monitorWebsite().catch(e => console.error(e.message)), 5 * 60 * 1000);\nsetInterval(() => monitorAgenda().catch(e => console.error(e.message)), 15 * 60 * 1000);
 setInterval(() => {
   const parts = new Intl.DateTimeFormat("en-GB", { timeZone: "America/Bogota", hour: "2-digit", minute: "2-digit" }).format(new Date());
   if (parts === "08:00") sendDailySummary().catch(e => console.error("Resumen diario:", e.message));
