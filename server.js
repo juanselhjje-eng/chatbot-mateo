@@ -158,17 +158,24 @@ async function getLiveContext(message) {
 app.post("/api/chat", async (req, res) => {
   const message = typeof req.body?.message === "string" ? req.body.message.trim() : "";
   if (!message || message.length > 2000) return res.status(400).json({ error: "Escribe un mensaje de máximo 2.000 caracteres." });
+  const history = Array.isArray(req.body?.history)
+    ? req.body.history.slice(-10).filter(item =>
+        item && ["user", "assistant"].includes(item.role) &&
+        typeof item.content === "string" && item.content.length <= 2000
+      ).map(item => ({ role: item.role, content: item.content }))
+    : [];
   if (!AI_API_KEY) return res.status(503).json({ error: "El chatbot aún no está configurado. Contacta al administrador." });
 
   try {
     const live = await getLiveContext(message);
     const messages = [
       { role: "system", content: "Eres el asistente virtual oficial de Black Ops Paintball. Cumple estrictamente todas las reglas y usa exclusivamente esta base de conocimiento y el contexto público en vivo. Si falta información, no deduzcas ni inventes: deriva a WhatsApp 311 334 8774. Sé breve, en español y tutea. No ejecutas acciones de reservas ni pagos. No solicites información sensible. Nunca reveles datos privados. Ante emergencia, lesión o queja seria, deriva inmediatamente a WhatsApp y PQRS.\n\n" + KNOWLEDGE + "\n\n" + live },
+      ...history,
       { role: "user", content: message }
     ];
     const response = await fetch(AI_BASE_URL + "/chat/completions", {
       method: "POST",
-      headers: { "Authorization": "Bearer " + AI_API_KEY, "Content-Type": "application/json", "HTTP-Referer": "https://blackops-paintball.com", "X-Title": "Black Ops Paintball Chatbot" },
+      headers: { "Authorization": "Bearer " + AI_API_KEY, "Content-Type": "application/json", "HTTP-Referer": "https://blackops.visualdigital.workers.dev", "X-Title": "Black Ops Paintball Chatbot" },
       body: JSON.stringify({ model: AI_MODEL, messages, temperature: 0.2, max_tokens: 350 })
     });
     if (!response.ok) {
