@@ -21,10 +21,12 @@ Agente de apoyo administrativo para Black Ops Paintball. Usa Gemini, WhatsApp Cl
 5. Configura el webhook de WhatsApp en Meta con:
    - Callback: `https://TU-DOMINIO/webhooks/whatsapp`
    - Verify token: el mismo valor de `WHATSAPP_VERIFY_TOKEN`
+   - Configura `META_APP_SECRET` para validar la firma de cada webhook.
    - Suscribe el campo `messages`.
 6. Configura el webhook de Instagram en Meta:
    - Callback: `https://TU-DOMINIO/webhooks/instagram`
    - Usa el mismo verify token.
+   - Los webhooks se validan con `META_APP_SECRET`.
    - Activa los eventos de mensajes que estén disponibles para tu app y cuenta.
 7. El dueño debe autorizar los activos de Meta y los permisos correspondientes. La cuenta de Instagram debe ser profesional y cumplir los requisitos vigentes de Meta.
 8. Define `OWNER_WHATSAPP_NUMBER` con código de país, por ejemplo 57 seguido del número, sin + ni espacios.
@@ -46,7 +48,7 @@ Llama a `POST /api/agent/instagram/ideas` con `x-agent-secret`. El agente genera
 ## Limitaciones que debes conocer
 - Gemini no puede leer por sí solo Instagram ni vigilar toda la web. Los webhooks y eventos del backend aportan esos datos.
 - El monitor web comprueba disponibilidad HTTP; no sustituye pruebas funcionales de reservas, pagos o formularios.
-- Las notificaciones proactivas por WhatsApp pueden requerir plantillas aprobadas por Meta fuera de la ventana de atención. Revisa la configuración y facturación de WhatsApp Business Platform.
+- Las notificaciones proactivas por WhatsApp pueden requerir plantillas aprobadas por Meta fuera de la ventana de atención. Si creas una plantilla aprobada con una variable de cuerpo, configura su nombre en `WHATSAPP_NOTIFICATION_TEMPLATE`. Revisa también la facturación de WhatsApp Business Platform.
 - El servidor debe permanecer encendido para procesar eventos y plazos. El almacenamiento de consultas usa Supabase para sobrevivir reinicios.
 - La respuesta al cliente tras dos minutos depende de que el webhook y Supabase estén configurados y operativos.
 - El agente no confirma pagos ni reservas, no inventa datos y no ejecuta acciones administrativas delicadas sin aprobación humana.
