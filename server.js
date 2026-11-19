@@ -355,7 +355,8 @@ app.post("/api/agent/events", async (req, res) => {
       low_stock: "Existencias bajas",
       website_update: "Novedad de la página web"
     };
-    await notifyOwner(`BLACK OPS — ${labels[type]}\n${JSON.stringify(details).slice(0, 2500)}`);
+    const ownerBrief = await runOwnerSecretary(gemini, labels[type], details, "Evento recibido desde la página web.");
+    await notifyOwner("BLACK OPS — " + ownerBrief);
     res.json({ ok: true });
   } catch (error) {
     console.error("Event error:", error.message);
