@@ -78,7 +78,7 @@ async function db(pathname, options = {}) {
   return body ? JSON.parse(body) : [];
 }
 
-async function gemini(contents, systemInstruction, jsonMode = false) {
+async function gemini(contents, systemInstruction, jsonMode = false, useSearch = false) {
   if (!GEMINI_KEYS.length) throw new Error("Falta GEMINI_API_KEY_1");
   let lastError;
   for (const key of GEMINI_KEYS) {
@@ -89,7 +89,8 @@ async function gemini(contents, systemInstruction, jsonMode = false) {
         body: JSON.stringify({
           systemInstruction: { parts: [{ text: systemInstruction }] },
           contents,
-          generationConfig: { temperature: 0.25, maxOutputTokens: 900, ...(jsonMode ? { responseMimeType: "application/json" } : {}) }
+          generationConfig: { temperature: 0.25, maxOutputTokens: 1200, ...(jsonMode ? { responseMimeType: "application/json" } : {}) },
+          ...(useSearch ? { tools: [{ google_search: {} }] } : {})
         }),
         signal: AbortSignal.timeout(25000)
       });
@@ -134,7 +135,7 @@ async function notifyOwner(message) {
   }
 }
 
-async function answerCustomer(message, history = []) {
+async function answerCustomer(message, history = [], liveContext = "") {
   const prompt = `Eres el secretario virtual oficial de Black Ops Paintball. Atiendes clientes y ayudas al dueño. Usa la base de conocimiento y no inventes. Si la pregunta requiere un dato que no está confirmado, si no entiendes o si no puedes responder con seguridad, marca needs_owner=true y escribe una pregunta concreta para el dueño. No pidas datos sensibles. No confirmes reservas ni pagos. Devuelve SOLO JSON con esta forma exacta: {"reply":"respuesta breve al cliente","needs_owner":false,"owner_question":""}. Si necesitas consultar al dueño, reply debe decir que vas a confirmar el dato y responderás en un momento.\n\nBASE DE CONOCIMIENTO:\n${KNOWLEDGE}`;
   const contents = [
     ...history.slice(-8).map(item => ({ role: item.role === "assistant" ? "model" : "user", parts: [{ text: item.content }] })),
@@ -171,7 +172,7 @@ async function createEscalation(customerPhone, customerMessage, ownerQuestion) {
 
 async function processCustomerMessage(phone, message, channel = "whatsapp", history = []) {
   let decision;
-  try { decision = await answerCustomer(message, history); }
+  try {\n    const live = await getLiveContext(message).catch(() => "No se pudo consultar la disponibilidad en vivo; no confirmes horarios.");\n    decision = await answerCustomer(message, history, live);\n  }
   catch (error) {
     console.error("Gemini error:", error.message);
     decision = { reply: "No pude confirmar esa información ahora. Voy a consultarlo con el equipo.", needs_owner: true, owner_question: "Gemini no pudo procesar la consulta. Revisa la pregunta y responde manualmente." };
@@ -374,7 +375,7 @@ app.post("/api/agent/events", async (req, res) => {
 app.post("/api/agent/instagram/ideas", async (req, res) => {
   if (!INTERNAL_SECRET || req.get("x-agent-secret") !== INTERNAL_SECRET) return res.sendStatus(401);
   try {
-    const ideas = await gemini([{ role: "user", parts: [{ text: "Propón 5 ideas concretas de contenido para Instagram de Black Ops Paintball en Támesis, Antioquia. Incluye formato, gancho, texto breve y llamada a la acción. No inventes precios, promociones, resultados, reseñas ni datos del negocio. Devuelve en español." }] }], "Eres asesor de marketing responsable para un negocio local. No propongas publicidad engañosa ni dirigida específicamente a menores. Las ideas son borradores para aprobación humana.");
+    const ideas = await gemini([{ role: "user", parts: [{ text: "Investiga tendencias actuales de contenido y publicidad para negocios locales de experiencias y actividades al aire libre en Colombia. Propón 5 ideas concretas para Instagram de Black Ops Paintball en Támesis, Antioquia. Incluye formato, gancho, texto breve, llamada a la acción y enlaces de las fuentes consultadas. Distingue tendencias observadas de recomendaciones. No inventes precios, promociones, resultados, reseñas ni datos del negocio." }] }], "Eres asesor de marketing responsable. Usa Google Search para investigar y cita enlaces verificables. No propongas publicidad engañosa ni dirigida específicamente a menores. Las ideas son borradores para aprobación humana.", false, true);
     await notifyOwner("IDEAS PARA INSTAGRAM — BORRADOR PARA REVISAR\n\n" + ideas);
     res.json({ ideas, sent_to_owner: Boolean(OWNER_PHONE && waReady()) });
   } catch (error) { res.status(503).json({ error: error.message }); }
@@ -413,7 +414,7 @@ async function sendDailySummary() {
   const since = new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString();
   const events = await db(`agent_events?created_at=gte.${encodeURIComponent(since)}&select=event_type,details,created_at&order=created_at.desc&limit=50`);
   const pending = await db("agent_escalations?status=eq.pending&select=ticket_code,customer_message,deadline_at");
-  const ideas = await gemini([{ role: "user", parts: [{ text: "Crea 3 ideas breves de publicidad para Black Ops Paintball, un negocio local en Támesis, Antioquia. No inventes promociones ni precios. Que sean realistas y fáciles de producir." }] }], "Eres asesor de marketing. Responde en español con ideas concretas y honestas.");
+  const ideas = await gemini([{ role: "user", parts: [{ text: "Investiga tendencias recientes de marketing local para negocios de experiencias al aire libre en Colombia y crea 3 ideas breves para Black Ops Paintball. Incluye enlaces a las fuentes. No inventes promociones ni precios." }] }], "Eres asesor de marketing. Usa Google Search, cita enlaces verificables y distingue hechos de ideas.", false, true);
   const report = `RESUMEN DIARIO BLACK OPS — ${local}\nEventos de las últimas 24 horas: ${JSON.stringify(events).slice(0, 2200)}\nConsultas pendientes al dueño: ${JSON.stringify(pending).slice(0, 800)}\n\nIDEAS DE PUBLICIDAD (borradores):\n${ideas}`;
   await notifyOwner(report);
   await db("agent_events", { method: "POST", body: JSON.stringify({ event_type: "daily_summary", details: { day: local }, created_at: new Date().toISOString() }) });
