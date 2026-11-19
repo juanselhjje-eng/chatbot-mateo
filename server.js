@@ -5,6 +5,7 @@ import rateLimit from "express-rate-limit";
 import path from "node:path";
 import { randomUUID, createHmac, timingSafeEqual } from "node:crypto";
 import { fileURLToPath } from "node:url";
+import { runCustomerTeam, runMarketingResearchTeam, runOwnerSecretary, runGeneralAudit, getAgentRoster } from "./agents.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -136,19 +137,7 @@ async function notifyOwner(message) {
 }
 
 async function answerCustomer(message, history = [], liveContext = "") {
-  const prompt = `Eres el secretario virtual oficial de Black Ops Paintball. Atiendes clientes y ayudas al dueño. Usa la base de conocimiento y no inventes. Si la pregunta requiere un dato que no está confirmado, si no entiendes o si no puedes responder con seguridad, marca needs_owner=true y escribe una pregunta concreta para el dueño. No pidas datos sensibles. No confirmes reservas ni pagos. Devuelve SOLO JSON con esta forma exacta: {"reply":"respuesta breve al cliente","needs_owner":false,"owner_question":""}. Si necesitas consultar al dueño, reply debe decir que vas a confirmar el dato y responderás en un momento.\n\nBASE DE CONOCIMIENTO:\n${KNOWLEDGE}\n\nDATOS EN VIVO:\n${liveContext}`;
-  const contents = [
-    ...history.slice(-8).map(item => ({ role: item.role === "assistant" ? "model" : "user", parts: [{ text: item.content }] })),
-    { role: "user", parts: [{ text: message }] }
-  ];
-  const raw = await gemini(contents, prompt, true);
-  const clean = raw.replace(/^```json\s*/i, "").replace(/```$/, "").trim();
-  const parsed = JSON.parse(clean);
-  return {
-    reply: String(parsed.reply || "Voy a confirmar ese dato con el equipo y te respondo en un momento.").slice(0, 1500),
-    needs_owner: Boolean(parsed.needs_owner),
-    owner_question: String(parsed.owner_question || "").slice(0, 1000)
-  };
+  return runCustomerTeam(gemini, message, history, KNOWLEDGE, liveContext);
 }
 
 async function createEscalation(customerPhone, customerMessage, ownerQuestion) {
@@ -377,7 +366,7 @@ app.post("/api/agent/events", async (req, res) => {
 app.post("/api/agent/instagram/ideas", async (req, res) => {
   if (!INTERNAL_SECRET || req.get("x-agent-secret") !== INTERNAL_SECRET) return res.sendStatus(401);
   try {
-    const ideas = await gemini([{ role: "user", parts: [{ text: "Investiga tendencias actuales de contenido y publicidad para negocios locales de experiencias y actividades al aire libre en Colombia. Propón 5 ideas concretas para Instagram de Black Ops Paintball en Támesis, Antioquia. Incluye formato, gancho, texto breve, llamada a la acción y enlaces de las fuentes consultadas. Distingue tendencias observadas de recomendaciones. No inventes precios, promociones, resultados, reseñas ni datos del negocio." }] }], "Eres asesor de marketing responsable. Usa Google Search para investigar y cita enlaces verificables. No propongas publicidad engañosa ni dirigida específicamente a menores. Las ideas son borradores para aprobación humana.", false, true);
+    const { research: ideas, review } = await runMarketingResearchTeam(gemini, "Investiga tendencias actuales de contenido y publicidad para negocios locales de experiencias y actividades al aire libre en Colombia. Propón 5 ideas concretas para Instagram de Black Ops Paintball en Támesis, Antioquia. Incluye formato, gancho, texto breve, llamada a la acción y enlaces de fuentes consultadas. Distingue tendencias observadas de recomendaciones. No inventes precios, promociones, resultados ni reseñas.", KNOWLEDGE);
     await notifyOwner("IDEAS PARA INSTAGRAM — BORRADOR PARA REVISAR\n\n" + ideas);
     res.json({ ideas, sent_to_owner: Boolean(OWNER_PHONE && waReady()) });
   } catch (error) { res.status(503).json({ error: error.message }); }
@@ -416,7 +405,7 @@ async function sendDailySummary() {
   const since = new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString();
   const events = await db(`agent_events?created_at=gte.${encodeURIComponent(since)}&select=event_type,details,created_at&order=created_at.desc&limit=50`);
   const pending = await db("agent_escalations?status=eq.pending&select=ticket_code,customer_message,deadline_at");
-  const ideas = await gemini([{ role: "user", parts: [{ text: "Investiga tendencias recientes de marketing local para negocios de experiencias al aire libre en Colombia y crea 3 ideas breves para Black Ops Paintball. Incluye enlaces a las fuentes. No inventes promociones ni precios." }] }], "Eres asesor de marketing. Usa Google Search, cita enlaces verificables y distingue hechos de ideas.", false, true);
+  const { research: ideas, review: marketingReview } = await runMarketingResearchTeam(gemini, "Investiga tendencias recientes de marketing local para negocios de experiencias al aire libre en Colombia y crea 3 ideas breves para Black Ops Paintball. Incluye enlaces a las fuentes. No inventes promociones ni precios.", KNOWLEDGE);
   const report = `RESUMEN DIARIO BLACK OPS — ${local}\nEventos de las últimas 24 horas: ${JSON.stringify(events).slice(0, 2200)}\nConsultas pendientes al dueño: ${JSON.stringify(pending).slice(0, 800)}\n\nIDEAS DE PUBLICIDAD (borradores):\n${ideas}`;
   await notifyOwner(report);
   await db("agent_events", { method: "POST", body: JSON.stringify({ event_type: "daily_summary", details: { day: local }, created_at: new Date().toISOString() }) });
@@ -424,7 +413,7 @@ async function sendDailySummary() {
 
 app.get("/api/health", (_req, res) => res.json({
   status: "ok",
-  integrations: { gemini: GEMINI_KEYS.length > 0, supabase: dbReady(), whatsapp: waReady(), instagram: Boolean(IG_TOKEN && IG_ACCOUNT_ID) }
+  integrations: { gemini: GEMINI_KEYS.length > 0, supabase: dbReady(), whatsapp: waReady(), instagram: Boolean(IG_TOKEN && IG_ACCOUNT_ID) }, agents: getAgentRoster()
 }));
 
 setInterval(() => checkExpiredEscalations().catch(e => console.error(e.message)), 15000);
