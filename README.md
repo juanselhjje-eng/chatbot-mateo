@@ -1,6 +1,17 @@
 # Black Ops — Secretario de IA
 
-Agente de apoyo administrativo para Black Ops Paintball. Usa Gemini, WhatsApp Cloud API, Instagram Messaging (si se habilita) y Supabase.
+Sistema multiagente de apoyo administrativo para Black Ops Paintball. Usa Gemini, WhatsApp Cloud API, Instagram Messaging (si se habilita) y Supabase. Un orquestador coordina siete subagentes especializados.
+
+## Equipo de subagentes
+1. **Orquestador:** clasifica las tareas, deriva consultas y coordina a los especialistas.
+2. **Revisor:** verifica las respuestas antes de entregarlas y detecta afirmaciones no respaldadas.
+3. **Investigador web:** busca tendencias, ideas y referencias para publicidad; separa hechos de recomendaciones.
+4. **Atención WhatsApp:** interpreta las consultas y prepara respuestas con información del negocio.
+5. **Secretario del dueño:** organiza alertas y comunicaciones para el propietario.
+6. **Supervisor web y agenda:** revisa disponibilidad HTTP y cambios en la agenda pública de los próximos siete días.
+7. **Auditor general:** analiza eventos, consultas pendientes y estado de monitoreo para el informe diario.
+
+Los subagentes son roles de IA coordinados por el servidor; no son siete servidores independientes. Comparten el mismo proveedor Gemini y sus límites de uso. El orquestador no autoriza cambios sensibles: pagos, confirmaciones y publicaciones requieren los controles del negocio.
 
 ## Funciones implementadas en el servidor
 - Chat web con Gemini y base de conocimiento del negocio.
@@ -10,7 +21,7 @@ Agente de apoyo administrativo para Black Ops Paintball. Usa Gemini, WhatsApp Cl
 - Webhook de mensajes directos de Instagram con respuesta asistida por Gemini.
 - Endpoint protegido para recibir eventos del sitio: reservas nuevas, pagos reportados/verificados, errores web, novedades y existencias bajas de consumibles/protección.
 - Borradores de ideas para Instagram enviados al dueño.
-- Monitor HTTP básico de la página y resumen diario a las 8:00 a. m. hora Colombia.
+- Monitor HTTP básico cada 5 minutos y supervisor de disponibilidad de agenda cada 15 minutos (requiere que la API pública de disponibilidad responda).\n- Auditoría general y resumen diario a las 8:00 a. m. hora Colombia.
 - Dos claves Gemini opcionales: la segunda se usa si falla la primera.
 
 ## Configuración
@@ -46,7 +57,7 @@ Para existencias bajas solo se aceptan categorías de consumibles, protección o
 Llama a `POST /api/agent/instagram/ideas` con `x-agent-secret`. El agente genera borradores y se los manda al dueño. La publicación automática está deshabilitada hasta construir un flujo de aprobación y completar los permisos de Meta.
 
 ## Limitaciones que debes conocer
-- Gemini no puede leer por sí solo Instagram ni vigilar toda la web. Los webhooks y eventos del backend aportan esos datos.
+- Gemini no puede leer por sí solo Instagram ni vigilar toda la web. Los webhooks y eventos del backend aportan esos datos. El supervisor de agenda solo puede revisar la disponibilidad que exponga la API pública; no sustituye una conexión directa al calendario interno ni identifica por sí solo quién creó o canceló una reserva.
 - El monitor web comprueba disponibilidad HTTP; no sustituye pruebas funcionales de reservas, pagos o formularios.
 - Las notificaciones proactivas por WhatsApp pueden requerir plantillas aprobadas por Meta fuera de la ventana de atención. Si creas una plantilla aprobada con una variable de cuerpo, configura su nombre en `WHATSAPP_NOTIFICATION_TEMPLATE`. Revisa también la facturación de WhatsApp Business Platform.
 - El servidor debe permanecer encendido para procesar eventos y plazos. El almacenamiento de consultas usa Supabase para sobrevivir reinicios.
