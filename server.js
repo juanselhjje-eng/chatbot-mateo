@@ -10,7 +10,7 @@ const app = express();
 const PORT = Number(process.env.PORT || 3000);
 const AI_API_KEY = process.env.AI_API_KEY;
 const AI_BASE_URL = (process.env.AI_BASE_URL || "https://openrouter.ai/api/v1").replace(/\\/$/, "");
-const AI_MODEL = process.env.AI_MODEL || "openai/gpt-4o-mini";
+const AI_MODEL = process.env.AI_MODEL || "openrouter/free";
 const BLACKOPS_API_URL = (process.env.BLACKOPS_API_URL || "https://yxldniscfjmzuvikgwaf.supabase.co/functions/v1/api").replace(/\\/$/, "");
 
 app.use(helmet({ contentSecurityPolicy: false }));
