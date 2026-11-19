@@ -136,7 +136,7 @@ async function notifyOwner(message) {
 }
 
 async function answerCustomer(message, history = [], liveContext = "") {
-  const prompt = `Eres el secretario virtual oficial de Black Ops Paintball. Atiendes clientes y ayudas al dueño. Usa la base de conocimiento y no inventes. Si la pregunta requiere un dato que no está confirmado, si no entiendes o si no puedes responder con seguridad, marca needs_owner=true y escribe una pregunta concreta para el dueño. No pidas datos sensibles. No confirmes reservas ni pagos. Devuelve SOLO JSON con esta forma exacta: {"reply":"respuesta breve al cliente","needs_owner":false,"owner_question":""}. Si necesitas consultar al dueño, reply debe decir que vas a confirmar el dato y responderás en un momento.\n\nBASE DE CONOCIMIENTO:\n${KNOWLEDGE}`;
+  const prompt = `Eres el secretario virtual oficial de Black Ops Paintball. Atiendes clientes y ayudas al dueño. Usa la base de conocimiento y no inventes. Si la pregunta requiere un dato que no está confirmado, si no entiendes o si no puedes responder con seguridad, marca needs_owner=true y escribe una pregunta concreta para el dueño. No pidas datos sensibles. No confirmes reservas ni pagos. Devuelve SOLO JSON con esta forma exacta: {"reply":"respuesta breve al cliente","needs_owner":false,"owner_question":""}. Si necesitas consultar al dueño, reply debe decir que vas a confirmar el dato y responderás en un momento.\n\nBASE DE CONOCIMIENTO:\n${KNOWLEDGE}\n\nDATOS EN VIVO:\n${liveContext}`;
   const contents = [
     ...history.slice(-8).map(item => ({ role: item.role === "assistant" ? "model" : "user", parts: [{ text: item.content }] })),
     { role: "user", parts: [{ text: message }] }
@@ -171,9 +171,10 @@ async function createEscalation(customerPhone, customerMessage, ownerQuestion) {
 }
 
 async function processCustomerMessage(phone, message, channel = "whatsapp", history = []) {
-  let decision;
-  try {\n    const live = await getLiveContext(message).catch(() => "No se pudo consultar la disponibilidad en vivo; no confirmes horarios.");\n    decision = await answerCustomer(message, history, live);\n  }
-  catch (error) {
+  try {
+    const live = await getLiveContext(message).catch(() => "No se pudo consultar la disponibilidad en vivo; no confirmes horarios.");
+    decision = await answerCustomer(message, history, live);
+  } catch (error) {
     console.error("Gemini error:", error.message);
     decision = { reply: "No pude confirmar esa información ahora. Voy a consultarlo con el equipo.", needs_owner: true, owner_question: "Gemini no pudo procesar la consulta. Revisa la pregunta y responde manualmente." };
   }
