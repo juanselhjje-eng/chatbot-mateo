@@ -1,68 +1,52 @@
-# Chatbot de Black Ops Paintball
+# Black Ops — Secretario de IA
 
-Chatbot web en español basado en el documento **Black Ops Paintball — Base de conocimiento para el chatbot** (18 de noviembre de 2026).
+Agente de apoyo administrativo para Black Ops Paintball. Usa Gemini, WhatsApp Cloud API, Instagram Messaging (si se habilita) y Supabase.
 
-## Funciones
+## Funciones implementadas en el servidor
+- Chat web con Gemini y base de conocimiento del negocio.
+- Webhook de WhatsApp para recibir mensajes y responder clientes.
+- Escalamiento al dueño por WhatsApp cuando falta información.
+- Ventana de 2 minutos: si el dueño responde con `#CODIGO respuesta`, el agente transmite la respuesta al cliente. Si vence el plazo, el cliente recibe un aviso honesto y el caso queda marcado como vencido.
+- Webhook de mensajes directos de Instagram con respuesta asistida por Gemini.
+- Endpoint protegido para recibir eventos del sitio: reservas nuevas, pagos reportados/verificados, errores web, novedades y existencias bajas de consumibles/protección.
+- Borradores de ideas para Instagram enviados al dueño.
+- Monitor HTTP básico de la página y resumen diario a las 8:00 a. m. hora Colombia.
+- Dos claves Gemini opcionales: la segunda se usa si falla la primera.
 
-- Interfaz adaptable a celular y computador.
-- Respuestas breves en español, con reglas estrictas para no inventar información.
-- Consulta desde el servidor de la configuración pública y disponibilidad de Black Ops.
-- API de IA compatible con OpenAI; se puede usar OpenRouter u otro proveedor compatible.
-- La clave de IA se guarda como variable de entorno y nunca se expone al navegador.
-- Limitación básica de solicitudes y validación de mensajes.
+## Configuración
+1. Node.js 20 o superior.
+2. En Render: Build `npm install`, Start `npm start`.
+3. Configura las variables de `.env.example` en el entorno del servidor. Nunca subas claves reales al repositorio.
+4. Ejecuta `supabase/migrations/001_agent_secretary.sql` en el SQL Editor del proyecto Supabase.
+5. Configura el webhook de WhatsApp en Meta con:
+   - Callback: `https://TU-DOMINIO/webhooks/whatsapp`
+   - Verify token: el mismo valor de `WHATSAPP_VERIFY_TOKEN`
+   - Suscribe el campo `messages`.
+6. Configura el webhook de Instagram en Meta:
+   - Callback: `https://TU-DOMINIO/webhooks/instagram`
+   - Usa el mismo verify token.
+   - Activa los eventos de mensajes que estén disponibles para tu app y cuenta.
+7. El dueño debe autorizar los activos de Meta y los permisos correspondientes. La cuenta de Instagram debe ser profesional y cumplir los requisitos vigentes de Meta.
+8. Define `OWNER_WHATSAPP_NUMBER` con código de país, por ejemplo 57 seguido del número, sin + ni espacios.
 
-## Requisitos
+## Respuesta del dueño a una consulta
+El agente envía un código de 8 caracteres. El dueño responde en el chat de WhatsApp del negocio:
+`#A1B2C3D4 La respuesta que debe recibir el cliente`
+El código real aparecerá en la notificación.
 
-- Node.js 20 o superior.
-- Una clave de un proveedor de IA compatible con la API de Chat Completions.
+## Conectar la página web
+La web debe llamar a `POST /api/agent/events` al producirse cada evento, enviando el encabezado `x-agent-secret` y un JSON:
+`{ "type": "reservation_created", "details": { "reservation_code": "..." } }`
+Tipos permitidos: `reservation_created`, `payment_reported`, `payment_verified`, `website_error`, `website_update`, `low_stock`.
+Para existencias bajas solo se aceptan categorías de consumibles, protección o limpieza. No enviar datos privados de clientes ni credenciales.
 
-## Configuración local
+## Ideas de Instagram
+Llama a `POST /api/agent/instagram/ideas` con `x-agent-secret`. El agente genera borradores y se los manda al dueño. La publicación automática está deshabilitada hasta construir un flujo de aprobación y completar los permisos de Meta.
 
-1. Clona el repositorio.
-2. Instala dependencias:
-
-   ```bash
-   npm install
-   ```
-
-3. Copia `.env.example` a `.env` y configura:
-
-   ```env
-   PORT=3000
-   AI_API_KEY=tu_clave
-   AI_BASE_URL=https://openrouter.ai/api/v1
-   AI_MODEL=openrouter/free
-   BLACKOPS_API_URL=https://yxldniscfjmzuvikgwaf.supabase.co/functions/v1/api
-   ```
-
-4. Inicia:
-
-   ```bash
-   npm start
-   ```
-
-5. Abre http://localhost:3000.
-
-## Despliegue en Render
-
-- Crear un servicio **Web Service** conectado a este repositorio.
-- Runtime: Node.
-- Build Command: `npm install`.
-- Start Command: `npm start`.
-- Agregar las variables `AI_API_KEY`, `AI_BASE_URL`, `AI_MODEL` y, opcionalmente, `BLACKOPS_API_URL`.
-- No subir el archivo `.env` ni pegar claves en el código.
-
-## Integración de datos en vivo
-
-El servidor hace solicitudes POST a la función pública Supabase con `Content-Type: application/json`:
-
-- Configuración: `{"method":"GET","path":"/api/public/config"}`
-- Disponibilidad: `{"method":"GET","path":"/api/public/availability?from=AAAA-MM-DD&to=AAAA-MM-DD"}`
-
-Estas consultas son de solo lectura. El chatbot no crea, modifica ni elimina reservas y no puede verificar pagos.
-
-## Límites importantes
-
-El bot nunca debe confirmar una reserva ni un pago, aceptar claves o contraseñas, ni revelar datos de otros clientes. Para información no incluida en la base de conocimiento, atención humana, lesiones, emergencias o quejas serias, debe remitir al WhatsApp **311 334 8774** y al apartado PQRS cuando corresponda.
-
-La información de dirección exacta, edad mínima, política completa de reembolsos, inasistencias, correo, redes y servicios extra no está confirmada: el bot debe pedir al cliente que consulte por WhatsApp.
+## Limitaciones que debes conocer
+- Gemini no puede leer por sí solo Instagram ni vigilar toda la web. Los webhooks y eventos del backend aportan esos datos.
+- El monitor web comprueba disponibilidad HTTP; no sustituye pruebas funcionales de reservas, pagos o formularios.
+- Las notificaciones proactivas por WhatsApp pueden requerir plantillas aprobadas por Meta fuera de la ventana de atención. Revisa la configuración y facturación de WhatsApp Business Platform.
+- El servidor debe permanecer encendido para procesar eventos y plazos. El almacenamiento de consultas usa Supabase para sobrevivir reinicios.
+- La respuesta al cliente tras dos minutos depende de que el webhook y Supabase estén configurados y operativos.
+- El agente no confirma pagos ni reservas, no inventa datos y no ejecuta acciones administrativas delicadas sin aprobación humana.
