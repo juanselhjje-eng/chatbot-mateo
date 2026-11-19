@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#111318">
+  <meta name="description" content="Asistente virtual de Black Ops Paintball, Támesis, Antioquia.">
+  <title>Black Ops | Asistente virtual</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <main class="shell">
+    <header class="topbar">
+      <div class="brand-mark" aria-hidden="true">BO</div>
+      <div><p class="eyebrow">BLACK OPS PAINTBALL</p><h1>Asistente virtual</h1><p class="status"><span></span> En línea para ayudarte</p></div>
+      <a class="booking-link" href="https://blackops.visualdigital.workers.dev" target="_blank" rel="noopener">Reservar</a>
+    </header>
+    <section class="chat-card" aria-label="Conversación con Black Ops">
+      <div class="intro">
+        <p class="eyebrow">MÁS QUE UN JUEGO, UNA EXPERIENCIA</p>
+        <h2>¿Qué necesitas saber?</h2>
+        <p>Pregúntame por paquetes, precios, pagos, horarios o cómo reservar.</p>
+      </div>
+      <div id="messages" class="messages" aria-live="polite">
+        <div class="message bot"><span class="avatar">BO</span><div class="bubble">¡Hola! Soy el asistente de Black Ops Paintball. ¿En qué te puedo ayudar?</div></div>
+      </div>
+      <div class="suggestions" id="suggestions">
+        <button type="button">¿Qué paquetes tienen?</button>
+        <button type="button">¿Cómo puedo reservar?</button>
+        <button type="button">¿Cómo funcionan los pagos?</button>
+      </div>
+      <form id="chat-form" class="composer">
+        <label class="sr-only" for="message-input">Escribe tu mensaje</label>
+        <input id="message-input" name="message" maxlength="2000" placeholder="Escribe tu pregunta..." autocomplete="off" required>
+        <button id="send-button" type="submit" aria-label="Enviar mensaje"><span>Enviar</span><b>➜</b></button>
+      </form>
+      <p class="disclaimer">No compartas contraseñas, datos de tarjetas ni claves bancarias. Para atención directa: <a href="https://wa.me/573113348774" target="_blank" rel="noopener">WhatsApp 311 334 8774</a>.</p>
+    </section>
+    <footer>BLACK OPS PAINTBALL · Támesis, Antioquia</footer>
+  </main>
+  <script src="/app.js" defer></script>
+</body>
+</html>
