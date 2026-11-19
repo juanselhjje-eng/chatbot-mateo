@@ -3,6 +3,7 @@ const input = document.querySelector("#message-input");
 const sendButton = document.querySelector("#send-button");
 const messages = document.querySelector("#messages");
 const suggestions = document.querySelector("#suggestions");
+const history = [];
 
 function addMessage(text, role) {
   const row = document.createElement("div");
@@ -34,11 +35,17 @@ async function sendMessage(text) {
     const response = await fetch("/api/chat", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ message: clean })
+      body: JSON.stringify({ message: clean, history })
     });
     const data = await response.json();
     pending.remove();
-    addMessage(response.ok ? data.answer : (data.error || "No pude responder. Escríbenos al 311 334 8774."), "bot");
+    if (response.ok) {
+      history.push({ role: "user", content: clean }, { role: "assistant", content: data.answer });
+      if (history.length > 10) history.splice(0, history.length - 10);
+      addMessage(data.answer, "bot");
+    } else {
+      addMessage(data.error || "No pude responder. Escríbenos al 311 334 8774.", "bot");
+    }
   } catch {
     pending.remove();
     addMessage("No pude conectar ahora. Inténtalo más tarde o escríbenos al 311 334 8774.", "bot");
