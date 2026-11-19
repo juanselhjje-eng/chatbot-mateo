@@ -9,9 +9,9 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
 const PORT = Number(process.env.PORT || 3000);
 const AI_API_KEY = process.env.AI_API_KEY;
-const AI_BASE_URL = (process.env.AI_BASE_URL || "https://openrouter.ai/api/v1").replace(/\\/$/, "");
+const AI_BASE_URL = (process.env.AI_BASE_URL || "https://openrouter.ai/api/v1").replace(/\/+$/, "");
 const AI_MODEL = process.env.AI_MODEL || "openrouter/free";
-const BLACKOPS_API_URL = (process.env.BLACKOPS_API_URL || "https://yxldniscfjmzuvikgwaf.supabase.co/functions/v1/api").replace(/\\/$/, "");
+const BLACKOPS_API_URL = (process.env.BLACKOPS_API_URL || "https://yxldniscfjmzuvikgwaf.supabase.co/functions/v1/api").replace(/\/+$/, "");
 
 app.use(helmet({ contentSecurityPolicy: false }));
 app.use(express.json({ limit: "20kb" }));
@@ -125,7 +125,7 @@ async function publicApi(payload) {
 }
 
 function dateRange(message) {
-  const match = message.match(/\\b(20\\d{2}-\\d{2}-\\d{2})\\b/);
+  const match = message.match(/\b(20\d{2}-\d{2}-\d{2})\b/);
   const from = match?.[1] || new Date().toISOString().slice(0, 10);
   const start = new Date(from + "T12:00:00Z");
   const end = new Date(start);
@@ -152,7 +152,7 @@ async function getLiveContext(message) {
       results.push("La consulta de disponibilidad en vivo no respondió. No confirmes horarios libres; remite a la página de reservas.");
     }
   }
-  return results.join("\\n");
+  return results.join("\n");
 }
 
 app.post("/api/chat", async (req, res) => {
