@@ -171,6 +171,7 @@ async function createEscalation(customerPhone, customerMessage, ownerQuestion) {
 }
 
 async function processCustomerMessage(phone, message, channel = "whatsapp", history = []) {
+  let decision;
   try {
     const live = await getLiveContext(message).catch(() => "No se pudo consultar la disponibilidad en vivo; no confirmes horarios.");
     decision = await answerCustomer(message, history, live);
